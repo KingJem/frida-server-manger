@@ -1,7 +1,5 @@
 # fsm (frida-server-manager)
 
-[中文说明](#中文说明)
-
 A command-line tool to manage frida-server on Android devices.
 
 ## Features
@@ -34,6 +32,15 @@ fsm install
 
 # Install a specific version
 fsm install 16.1.4
+
+# Install with custom repository (owner/repo format)
+fsm install -r frida/frida
+
+# Install with custom name
+fsm install -n my-frida-server
+
+# Install keeping original name
+fsm install -k
 ```
 
 #### Run frida-server
@@ -42,7 +49,13 @@ fsm install 16.1.4
 fsm run
 
 # Run with custom directory and parameters
-fsm run --dir /custom/path --params "-D"
+fsm run -d /custom/path -p "-D"
+
+# Run specific version
+fsm run -V 16.1.4
+
+# Run with custom name
+fsm run -n my-frida-server
 ```
 
 #### List frida-server files
@@ -51,18 +64,73 @@ fsm run --dir /custom/path --params "-D"
 fsm list
 
 # List frida-server files in custom directory
-fsm list --dir /custom/path
+fsm list -d /custom/path
+```
+
+#### Process Management
+```bash
+# List running frida-server processes
+fsm ps
+
+# List specific processes
+fsm ps -n com.example.app
+
+# Kill frida-server processes
+fsm kill
+
+# Kill specific process by PID
+fsm kill -p 12345
+
+# Kill processes by name
+fsm kill -n frida-server
 ```
 
 ### Options
 
 - `-v`, `--verbose`: Enable verbose output
+- `-h`, `--help`: Show help message
 
 ## Requirements
 
 - Python 3.6 or higher
 - ADB (Android Debug Bridge) installed on your system
 - An Android device connected via USB with USB debugging enabled
+
+## Development
+
+### Project Structure
+
+This project uses modern Python packaging with `pyproject.toml` configuration:
+
+```toml
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+```
+
+### Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/KingJem/frida-server-manger.git
+cd frida-server-manger
+
+# Install in development mode
+pip install -e .
+
+# Build distribution packages
+python -m build
+```
+
+### Installation for Development
+
+```bash
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Run tests
+python -m pytest tests/
+```
 
 ## License
 
@@ -104,6 +172,15 @@ fsm install
 
 # 安装特定版本
 fsm install 16.1.4
+
+# 使用自定义仓库安装（owner/repo格式）
+fsm install -r frida/frida
+
+# 使用自定义名称安装
+fsm install -n my-frida-server
+
+# 保持原始名称安装
+fsm install -k
 ```
 
 #### 运行frida-server
@@ -112,7 +189,13 @@ fsm install 16.1.4
 fsm run
 
 # 使用自定义目录和参数运行
-fsm run --dir /custom/path --params "-D"
+fsm run -d /custom/path -p "-D"
+
+# 运行特定版本
+fsm run -V 16.1.4
+
+# 使用自定义名称运行
+fsm run -n my-frida-server
 ```
 
 #### 列出frida-server文件
@@ -121,18 +204,73 @@ fsm run --dir /custom/path --params "-D"
 fsm list
 
 # 列出自定义目录中的frida-server文件
-fsm list --dir /custom/path
+fsm list -d /custom/path
+```
+
+#### 进程管理
+```bash
+# 列出运行的frida-server进程
+fsm ps
+
+# 列出特定进程
+fsm ps -n com.example.app
+
+# 终止frida-server进程
+fsm kill
+
+# 根据PID终止特定进程
+fsm kill -p 12345
+
+# 根据名称终止进程
+fsm kill -n frida-server
 ```
 
 ### 选项
 
 - `-v`, `--verbose`: 启用详细输出
+- `-h`, `--help`: 显示帮助信息
 
 ## 系统要求
 
 - Python 3.6或更高版本
 - 系统上已安装ADB（Android Debug Bridge）
 - 通过USB连接的Android设备，并已启用USB调试模式
+
+## 开发指南
+
+### 项目结构
+
+本项目使用现代化的Python打包方式，采用`pyproject.toml`配置文件：
+
+```toml
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+```
+
+### 从源码构建
+
+```bash
+# 克隆仓库
+git clone https://github.com/KingJem/frida-server-manger.git
+cd frida-server-manger
+
+# 以开发模式安装
+pip install -e .
+
+# 构建分发包
+python -m build
+```
+
+### 开发环境安装
+
+```bash
+# 安装开发依赖
+pip install -e ".[dev]"
+
+# 运行测试
+python -m pytest tests/
+```
 
 ## 许可证
 

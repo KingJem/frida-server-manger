@@ -272,13 +272,23 @@ def run_frida_server(custom_dir=None, custom_params=None, verbose=False, version
     cmd = f"adb shell su -c 'nohup {server_path}"
     if custom_params and not custom_params.startswith('/'):
         cmd += f" {custom_params}"
-    cmd += " &'"
+    cmd += " < /dev/null > /dev/null 2>&1 &'"
 
     if verbose:
         print(f"Running frida-server with command: {cmd}")
 
-    # Run frida-server
-    output = run_command(cmd, verbose)
+    # Run frida-server - don't wait for output since it's backgrounded
+    print("Starting frida-server...")
+    try:
+        subprocess.run(cmd, shell=True, check=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError as e:
+        print(f"Error starting frida-server: {e}")
+        sys.exit(1)
+
+    # Small delay to allow process to start
+    import time
+    time.sleep(1)
 
     # Verify it's running
     verify_cmd = "adb shell ps | grep frida-server"
@@ -325,27 +335,30 @@ def list_frida_server(custom_dir=None, verbose=False):
         print(f"{filename:<40} {version if version else 'Unknown':<40}")
 
 
-def get_running_frida_servers(verbose=False):
-    """Check and list running frida-server processes on the Android device"""
+def get_running_processes(verbose=False, process_name=None):
+    """Check and list running processes on the Android device"""
     check_adb_connection(verbose)
     
-    # Command to list all running frida-server processes with more details
-    cmd = "adb shell ps -A | grep frida-server"
+    # Use custom process name if provided, default to frida-server
+    search_name = process_name if process_name else "frida-server"
+    
+    # Command to list all running processes with more details
+    cmd = f"adb shell ps -A | grep {search_name}"
     
     if verbose:
-        print(f"Checking for running frida-server processes with command: {cmd}")
+        print(f"Checking for running processes with command: {cmd}")
     
     output = run_command(cmd, verbose)
     
     if not output:
-        print("No running frida-server processes found")
+        print(f"No running processes found matching '{search_name}'")
         return []
     
     # Process the output and extract process information
     processes = []
     lines = output.strip().split('\n')
     
-    print("Running frida-server processes:")
+    print(f"Running processes matching '{search_name}':")
     print("=" * 80)
     print(f"{'PID':<10} {'User':<15} {'Memory':<10} {'Command':<40}")
     print("=" * 80)
@@ -376,11 +389,34 @@ def get_running_frida_servers(verbose=False):
     return processes
 
 
-def kill_frida_server(pid=None, verbose=False):
+def get_running_frida_servers(verbose=False):
+    """Check and list running frida-server processes on the Android device (backward compatibility)"""
+    return get_running_processes(verbose, "frida-server")
+
+
+def kill_frida_server(pid=None, verbose=False, name=None):
     """Kill frida-server process on the Android device"""
     check_adb_connection(verbose)
     
-    if pid:
+    if name:
+        # Kill processes by name
+        cmd = f"adb shell su -c 'pkill -f {name} || killall -9 {name}'"
+        if verbose:
+            print(f"Killing processes with name '{name}'")
+        
+        output = run_command(cmd, verbose)
+        
+        # Verify no processes with the name are running
+        verify_cmd = f"adb shell ps -A | grep {name}"
+        verify_output = run_command(verify_cmd, verbose)
+        
+        if not verify_output:
+            print(f"Success: All processes with name '{name}' have been killed")
+        else:
+            print(f"Warning: Some processes with name '{name}' might still be running")
+            if verbose:
+                print(verify_output)
+    elif pid:
         # Kill specific process by PID
         cmd = f"adb shell su -c 'kill -9 {pid}'"
         if verbose:

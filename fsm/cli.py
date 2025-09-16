@@ -1,6 +1,6 @@
 import sys
 import argparse
-from fsm.core import check_adb_connection, install_frida_server, run_frida_server, list_frida_server, get_running_frida_servers, kill_frida_server
+from fsm.core import check_adb_connection, install_frida_server, run_frida_server, list_frida_server, get_running_processes, kill_frida_server
 
 
 def main():
@@ -24,9 +24,9 @@ def main():
         parents=[parent_parser]
     )
     install_parser.add_argument('version', nargs='?', help='Specific version of frida-server to install')
-    install_parser.add_argument('--repo', default='frida/frida', help='Custom GitHub repository (owner/repo format)')
-    install_parser.add_argument('--keep-name', action='store_true', help='Keep the original name when installing, instead of using version-specific name')
-    install_parser.add_argument('--name', help='Custom name for frida-server on the device')
+    install_parser.add_argument('-r', '--repo', default='frida/frida', help='Custom GitHub repository (owner/repo format)')
+    install_parser.add_argument('-k', '--keep-name', action='store_true', help='Keep the original name when installing, instead of using version-specific name')
+    install_parser.add_argument('-n', '--name', help='Custom name for frida-server on the device')
     
     # Run command
     run_parser = subparsers.add_parser(
@@ -34,10 +34,10 @@ def main():
         help='Run frida-server on the device',
         parents=[parent_parser]
     )
-    run_parser.add_argument('--dir', help='Custom directory to run frida-server from')
-    run_parser.add_argument('--params', help='Additional parameters for frida-server')
-    run_parser.add_argument('--version', help='Specific version of frida-server to run')
-    run_parser.add_argument('--name', help='Custom name of frida-server to run')
+    run_parser.add_argument('-d', '--dir', help='Custom directory to run frida-server from')
+    run_parser.add_argument('-p', '--params', help='Additional parameters for frida-server')
+    run_parser.add_argument('-V', '--version', help='Specific version of frida-server to run')
+    run_parser.add_argument('-n', '--name', help='Custom name of frida-server to run')
     
     # List command
     list_parser = subparsers.add_parser(
@@ -45,14 +45,15 @@ def main():
         help='List frida-server files on the device and show their versions',
         parents=[parent_parser]
     )
-    list_parser.add_argument('--dir', help='Custom directory to list frida-server files from')
+    list_parser.add_argument('-d', '--dir', help='Custom directory to list frida-server files from')
     
     # PS command
     ps_parser = subparsers.add_parser(
         'ps',
-        help='List running frida-server processes on the device',
+        help='List running processes on the device (default: frida-server, use -n for custom processes)',
         parents=[parent_parser]
     )
+    ps_parser.add_argument('-n', '--name', help='Filter processes by name (e.g., "frida-server", "com.example.app", etc.)')
     
     # Kill command
     kill_parser = subparsers.add_parser(
@@ -60,7 +61,8 @@ def main():
         help='Kill frida-server process(es) on the device',
         parents=[parent_parser]
     )
-    kill_parser.add_argument('--pid', help='Specific PID of frida-server process to kill')
+    kill_parser.add_argument('-p', '--pid', help='Specific PID of frida-server process to kill')
+    kill_parser.add_argument('-n', '--name', help='Process name to kill (e.g., "frida-server", "com.example.app", etc.)')
     
     args = parser.parse_args()
     
@@ -86,12 +88,12 @@ def main():
     
     # Handle ps command
     elif args.command == 'ps':
-        get_running_frida_servers(args.verbose)
+        get_running_processes(args.verbose, args.name)
         sys.exit(0)
     
     # Handle kill command
     elif args.command == 'kill':
-        kill_frida_server(args.pid, args.verbose)
+        kill_frida_server(args.pid, args.verbose, args.name)
         sys.exit(0)
     
     else:

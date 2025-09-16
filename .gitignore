@@ -167,3 +167,6 @@ Desktop.ini
 *.temp
 *.swp
 *.swo
+.idea/
+.claude/
+.history/
