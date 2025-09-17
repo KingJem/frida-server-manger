@@ -1,4 +1,4 @@
-from fsm.cli import main
+from fsm.cli import app
 
 if __name__ == "__main__":
-    main()
+    app()
