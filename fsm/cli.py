@@ -21,7 +21,9 @@ app = typer.Typer(
     name="fsm",
     help="frida-server manager for Android devices",
     add_completion=False,
-    rich_markup_mode="rich"
+    rich_markup_mode="rich",
+    # Ensure help option has -h short form
+    context_settings={"help_option_names": ["--help", "-h"]}
 )
 
 console = Console()
@@ -95,6 +97,7 @@ def install(
     repo: str = typer.Option("frida/frida", "--repo", "-r", help="Custom GitHub repository (owner/repo format)"),
     keep_name: bool = typer.Option(False, "--keep-name", "-k", help="Keep the original name when installing"),
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Custom name for frida-server on the device"),
+    url: Optional[str] = typer.Option(None, "--url", "-u", help="Custom URL to download frida-server from (supports xz, gz, tar.gz formats)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
 ):
     """Install frida-server on the device"""
@@ -107,7 +110,7 @@ def install(
             task = progress.add_task(description="Installing frida-server...", total=None)
 
             # Run installation
-            result = core_install(version, verbose, repo, keep_name, name)
+            result = core_install(version, verbose, repo, keep_name, name, url)
 
             progress.update(task, completed=True)
 
@@ -156,6 +159,7 @@ def run(
 @app.command()
 def list(
     dir: Optional[str] = typer.Option(None, "--dir", "-d", help="Custom directory to list frida-server files from"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Filter by specific frida-server name"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
 ):
     """List frida-server files on the device and show their versions"""
@@ -171,19 +175,33 @@ def list(
             from fsm.core import run_command, get_frida_server_version, DEFAULT_INSTALL_DIR
 
             server_dir = dir if dir else DEFAULT_INSTALL_DIR
-            output = run_command(f"adb shell ls {server_dir} | grep frida-server", verbose)
-
-            progress.update(task, completed=True)
-
-            if not output:
-                print_warning(f"No frida-server files found in {server_dir}")
-                return
-
-            # Process the files and get their versions
-            files = output.strip().split('\n')
+            
+            # Build the command with optional name filter
+            if name:
+                # If name is provided, search for that specific file
+                output = run_command(f"adb shell ls {server_dir}/{name} 2>/dev/null || echo 'Not found'", verbose)
+                # Check if the file exists
+                if output.strip() == 'Not found' or 'No such file or directory' in output:
+                    progress.update(task, completed=True)
+                    print_warning(f"No frida-server file found with name '{name}' in {server_dir}")
+                    return
+                # File exists, use its name
+                files = [name]
+            else:
+                # Otherwise list all frida-server files
+                output = run_command(f"adb shell ls {server_dir} | grep frida-server", verbose)
+                
+                progress.update(task, completed=True)
+                
+                if not output:
+                    print_warning(f"No frida-server files found in {server_dir}")
+                    return
+                
+                # Process the files and get their versions
+                files = output.strip().split('\n')
 
             # Create a rich table
-            table = Table(title=f"Frida-Server Files in {server_dir}")
+            table = Table(title=f"Frida-Server Files in {server_dir}" + (f" (Filtered by: {name})" if name else ""))
             table.add_column("Filename", style="cyan", no_wrap=True)
             table.add_column("Version", style="green")
 

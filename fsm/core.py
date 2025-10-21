@@ -1,11 +1,12 @@
-import lzma
-import os
-import subprocess
 import sys
+import os
+import urllib.request
+import json
 import lzma
+import tempfile
+import shutil
 from pathlib import Path
-
-import requests
+import subprocess
 
 # GitHub API URL for Frida releases
 GITHUB_RELEASES_URL = "https://api.github.com/repos/frida/frida/releases"
@@ -65,13 +66,17 @@ def get_latest_frida_version(repo="frida/frida", verbose=False):
 
     try:
         url = f"https://api.github.com/repos/{repo}/releases/latest"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        latest_version = data["tag_name"].strip('v')  # Remove 'v' prefix if present
-        if verbose:
-            print(f"Latest version: {latest_version}")
-        return latest_version
+        # Set a timeout for the request
+        with urllib.request.urlopen(url, timeout=10) as response:
+            # Check if the request was successful
+            if response.status != 200:
+                raise Exception(f"HTTP error {response.status}")
+            # Read and parse the response
+            data = json.loads(response.read().decode())
+            latest_version = data["tag_name"].strip('v')  # Remove 'v' prefix if present
+            if verbose:
+                print(f"Latest version: {latest_version}")
+            return latest_version
     except Exception as e:
         if verbose:
             print(f"Error fetching latest version: {e}")
@@ -111,64 +116,130 @@ def get_frida_server_arch(verbose=False):
     return frida_arch
 
 
-def download_frida_server(version=None, repo="frida/frida", verbose=False):
-    """Download frida-server for Android"""
-    # Get the latest version if not specified
-    if not version:
+def download_frida_server(version=None, repo="frida/frida", verbose=False, url=None):
+    """Download frida-server for Android using temporary files"""
+    # Get the latest version if not specified and no URL provided
+    if not url and not version:
         version = get_latest_frida_version(repo, verbose)
         if not version:
             print("Error: Could not determine the latest version")
             sys.exit(1)
 
-    # Determine the architecture
-    frida_arch = get_frida_server_arch(verbose)
-
-    # Construct the download URL with .xz extension
-    download_url = f"https://github.com/{repo}/releases/download/{version}/frida-server-{version}-{frida_arch}.xz"
-
-    # Create the download directory if it doesn't exist
-    local_path = Path("/tmp")
-    local_path.mkdir(parents=True, exist_ok=True)
-
-    # Paths for compressed and extracted files
-    compressed_file = local_path / f"frida-server-{version}-{frida_arch}.xz"
-    extracted_file = local_path / f"frida-server-{version}"
+    # Determine the architecture if not using URL
+    if not url:
+        frida_arch = get_frida_server_arch(verbose)
+        download_url = f"https://github.com/{repo}/releases/download/{version}/frida-server-{version}-{frida_arch}.xz"
+    else:
+        download_url = url
 
     if verbose:
-        print(f"Downloading frida-server-{version}-{frida_arch}.xz from {download_url}")
-        print(f"Saving compressed file to {compressed_file}")
+        print(f"Downloading from {download_url}")
 
     try:
         # Download the compressed file
-        response = requests.get(download_url, stream=True, timeout=30)
-        response.raise_for_status()
+        # Set headers to mimic a browser to avoid GitHub API rate limiting
+        req = urllib.request.Request(download_url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        with urllib.request.urlopen(req, timeout=30) as response:
+            # Check if the request was successful
+            if response.status != 200:
+                raise Exception(f"HTTP error {response.status}")
 
-        with open(compressed_file, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
+        # Use tempfile to handle temporary files
+        # Create a temporary directory for our files
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Determine filename based on URL
+            if url:
+                filename = download_url.split('/')[-1]
+            else:
+                filename = f"frida-server-{version}-{frida_arch}.xz"
+            
+            # Path for compressed file
+            compressed_file = temp_path / filename
+            
+            # Save the downloaded content
+            # For large files, we'll read in chunks to avoid memory issues
+            with open(compressed_file, 'wb') as f:
+                while True:
+                    chunk = response.read(8192)
+                    if not chunk:
+                        break
                     f.write(chunk)
 
-        if verbose:
-            print(f"Download completed: {compressed_file}")
-            print(f"Extracting to {extracted_file}")
+            if verbose:
+                print(f"Download completed: {compressed_file}")
 
-        # Extract the .xz file
-        with lzma.open(compressed_file, 'rb') as f_in:
-            with open(extracted_file, 'wb') as f_out:
-                f_out.write(f_in.read())
+            # Determine file extension and use appropriate extraction method
+            file_extension = compressed_file.suffix.lower()
+            
+            # Create a temporary file for the extracted content
+            # We need to close it here and reopen because we need to change its permissions
+            extracted_temp = tempfile.NamedTemporaryFile(delete=False, dir=temp_dir)
+            extracted_temp.close()
+            extracted_file = Path(extracted_temp.name)
+            
+            if verbose:
+                print(f"Extracting to {extracted_file}")
 
-        if verbose:
-            print(f"Extraction completed: {extracted_file}")
-            # Remove the compressed file
-            os.remove(compressed_file)
-            print(f"Removed compressed file: {compressed_file}")
+            if file_extension == '.xz':
+                # Extract .xz file
+                with lzma.open(compressed_file, 'rb') as f_in:
+                    with open(extracted_file, 'wb') as f_out:
+                        f_out.write(f_in.read())
+            elif file_extension == '.gz':
+                # Extract .gz file
+                import gzip
+                with gzip.open(compressed_file, 'rb') as f_in:
+                    with open(extracted_file, 'wb') as f_out:
+                        f_out.write(f_in.read())
+            elif file_extension == '.tar' and str(compressed_file).endswith('.tar.gz'):
+                # Extract .tar.gz file
+                import tarfile
+                with tarfile.open(compressed_file, 'r:gz') as tar:
+                    # Find the first executable file in the tar archive
+                    for member in tar.getmembers():
+                        if member.isfile():
+                            # Extract to our temporary file
+                            tar.extract(member, temp_dir)
+                            # Move the extracted file to our named temporary file
+                            os.rename(temp_path / member.name, extracted_file)
+                            break
+            else:
+                # If it's not a recognized compressed format, assume it's already extracted
+                # Just copy the file
+                import shutil
+                shutil.copy2(compressed_file, extracted_file)
 
-        # Make the extracted file executable
-        os.chmod(extracted_file, 0o755)
-        if verbose:
-            print(f"Made the file executable")
+            if verbose:
+                print(f"Extraction completed: {extracted_file}")
 
-        return str(extracted_file)
+            # Make the extracted file executable
+            os.chmod(extracted_file, 0o755)
+            if verbose:
+                print(f"Made the file executable")
+
+            # The temporary directory will be automatically deleted when exiting the context manager
+            # But we need to return the path to the extracted file which will be deleted
+            # So we need to create a final temporary file outside the context manager
+            # to return to the caller
+            final_temp = tempfile.NamedTemporaryFile(delete=False)
+            final_temp.close()
+            
+            # Copy the extracted file to the final temporary file
+            import shutil
+            shutil.copy2(extracted_file, final_temp.name)
+            os.chmod(final_temp.name, 0o755)
+            
+            if verbose:
+                print(f"Created final temporary file: {final_temp.name}")
+            
+            # Return the path to the final temporary file
+            # The caller is responsible for deleting this file when done
+            return final_temp.name
+            
     except Exception as e:
         if verbose:
             print(f"Error downloading frida-server: {e}")
@@ -176,37 +247,53 @@ def download_frida_server(version=None, repo="frida/frida", verbose=False):
         sys.exit(1)
 
 
-def install_frida_server(version=None, verbose=False, repo="frida/frida", keep_name=False, custom_name=None):
+def install_frida_server(version=None, verbose=False, repo="frida/frida", keep_name=False, custom_name=None, url=None):
     """Install frida-server on the Android device"""
     check_adb_connection(verbose)
 
     # Download frida-server
-    local_path = download_frida_server(version, repo, verbose)
+    local_path = None
+    try:
+        local_path = download_frida_server(version, repo, verbose, url)
 
-    # Determine the remote path
-    if version and not keep_name and not custom_name:
-        remote_path = f"{DEFAULT_INSTALL_DIR}/frida-server-{version}"
-    elif custom_name:
-        remote_path = f"{DEFAULT_INSTALL_DIR}/{custom_name}"
-    else:
-        remote_path = f"{DEFAULT_INSTALL_DIR}/frida-server"
+        # Determine the remote path
+        if version and not keep_name and not custom_name:
+            remote_path = f"{DEFAULT_INSTALL_DIR}/frida-server-{version}"
+        elif custom_name:
+            remote_path = f"{DEFAULT_INSTALL_DIR}/{custom_name}"
+        else:
+            remote_path = f"{DEFAULT_INSTALL_DIR}/frida-server"
 
-    if verbose:
-        print(f"Installing frida-server to {remote_path}")
+        if verbose:
+            print(f"Installing frida-server to {remote_path}")
 
-    # Push the file to the device
-    output = run_command(f"adb push {local_path} {remote_path}", verbose, return_error=True)
-    if not output or "1 file pushed" not in output:
-        print("Error: Failed to push frida-server to the device")
-        sys.exit(1)
+        # Push the file to the device
+        output = run_command(f"adb push {local_path} {remote_path}", verbose, return_error=True)
+        if not output or "1 file pushed" not in output:
+            print("Error: Failed to push frida-server to the device")
+            sys.exit(1)
 
-    # Make the file executable on the device
-    output = run_command(f"adb shell chmod 755 {remote_path}", verbose)
+        # Make the file executable on the device
+        output = run_command(f"adb shell chmod 755 {remote_path}", verbose)
 
-    if verbose:
-        print("Successfully installed frida-server")
+        if verbose:
+            print("Successfully installed frida-server")
 
-    return remote_path
+        return remote_path
+    except Exception as e:
+        # Re-raise the exception after cleanup
+        raise
+    finally:
+        # Always clean up the temporary file
+        if local_path and os.path.exists(local_path):
+            try:
+                os.unlink(local_path)
+                if verbose:
+                    print(f"Cleaned up temporary file: {local_path}")
+            except Exception as cleanup_error:
+                # Just log the cleanup error but don't fail the installation
+                if verbose:
+                    print(f"Warning: Could not clean up temporary file: {cleanup_error}")
 
 
 def get_frida_server_version(remote_path, verbose=False):
@@ -214,12 +301,28 @@ def get_frida_server_version(remote_path, verbose=False):
     if verbose:
         print(f"Checking version of frida-server at {remote_path}")
 
-    # Try to run the file with --version
+    # First try: Run the file with --version
     version_output = run_command(f"adb shell {remote_path} --version", verbose)
-
     if version_output:
         return version_output.strip()
-
+    
+    # Second try: Check if file exists and is executable
+    check_output = run_command(f"adb shell ls -la {remote_path}", verbose)
+    if check_output and '-rwx' in check_output:
+        # File exists and is executable, try alternative version check
+        try:
+            # Try to get version by parsing file properties or name pattern
+            # Check if filename contains version pattern
+            filename = os.path.basename(remote_path)
+            import re
+            # Look for version patterns like "16.1.4" in filename
+            version_match = re.search(r'\d+\.\d+\.\d+', filename)
+            if version_match:
+                return version_match.group()
+        except Exception as e:
+            if verbose:
+                print(f"Error in fallback version detection: {e}")
+    
     if verbose:
         print("Could not determine frida-server version")
     return None

@@ -18,7 +18,6 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "requests",
     "typer>=0.9.0",
     "rich>=13.0.0",
 ]
