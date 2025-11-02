@@ -239,6 +239,7 @@ quick-ref:
   @echo "  -r, --repo     : Custom repository (frida/frida)"
   @echo "  -k, --keep-name: Keep original filename"
   @echo "  -n, --name     : Custom name"
+  @echo "  -u, --url      : Custom download URL (supports xz, gz, tar.gz)"
   @echo ""
   @echo "Run Options:"
   @echo "  -d, --dir      : Custom directory"

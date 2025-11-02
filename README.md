@@ -6,7 +6,8 @@ A command-line tool to manage frida-server on Android devices.
 
 - Install frida-server on Android devices
 - Run frida-server with custom options
-- List frida-server files on the device and show their versions
+- List frida-server files on the device with enhanced version detection
+- Filter frida-server files by name
 - Check frida versions and compatibility
 - Easy-to-use command-line interface
 
@@ -41,6 +42,9 @@ fsm install -n my-frida-server
 
 # Install keeping original name
 fsm install -k
+
+# Install from custom URL
+  fsm install --url https://example.com/frida-server.xz
 ```
 
 #### Run frida-server
@@ -65,6 +69,9 @@ fsm list
 
 # List frida-server files in custom directory
 fsm list -d /custom/path
+
+# List specific frida-server file by name
+fsm list -n frida-server-16.1.4
 ```
 
 #### Process Management
@@ -146,7 +153,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - 在Android设备上安装frida-server
 - 使用自定义选项运行frida-server
-- 列出设备上的frida-server文件并显示其版本
+- 列出设备上的frida-server文件并显示增强的版本检测
+- 根据名称筛选frida-server文件
 - 检查frida版本和兼容性
 - 易用的命令行界面
 
@@ -181,6 +189,9 @@ fsm install -n my-frida-server
 
 # 保持原始名称安装
 fsm install -k
+
+# 从自定义URL安装
+  fsm install --url https://example.com/frida-server.xz
 ```
 
 #### 运行frida-server
@@ -205,6 +216,9 @@ fsm list
 
 # 列出自定义目录中的frida-server文件
 fsm list -d /custom/path
+
+# 根据名称列出特定的frida-server文件
+fsm list -n frida-server-16.1.4
 ```
 
 #### 进程管理
