@@ -45,6 +45,9 @@ fsm install -k
 
 # Install from custom URL
   fsm install --url https://example.com/frida-server.xz
+
+# Install with proxy
+fsm install -p http://127.0.0.1:7890
 ```
 
 #### Run frida-server
@@ -60,6 +63,9 @@ fsm run -V 16.1.4
 
 # Run with custom name
 fsm run -n my-frida-server
+
+# Force run the specified version (stop any existing processes first)
+fsm run -V 16.1.4 -f
 ```
 
 #### List frida-server files
@@ -192,6 +198,9 @@ fsm install -k
 
 # 从自定义URL安装
   fsm install --url https://example.com/frida-server.xz
+
+# 使用代理安装
+fsm install -p http://127.0.0.1:7890
 ```
 
 #### 运行frida-server
@@ -207,6 +216,9 @@ fsm run -V 16.1.4
 
 # 使用自定义名称运行
 fsm run -n my-frida-server
+
+# 强制运行指定版本（先停止所有现有进程）
+fsm run -V 16.1.4 -f
 ```
 
 #### 列出frida-server文件

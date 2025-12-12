@@ -55,6 +55,12 @@ def check(
 ):
     """Check ADB connection to devices"""
     try:
+        # Import core function
+        from fsm.core import run_command
+        
+        devices = None
+        output = None
+        
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -62,12 +68,10 @@ def check(
         ) as progress:
             task = progress.add_task(description="Checking ADB connection...", total=None)
 
-            # Import and run the core function
-            from fsm.core import run_command
-
             output = run_command('adb devices', verbose)
 
             if output is None:
+                progress.update(task, completed=True)
                 print_error("ADB is not installed or not in PATH")
                 raise typer.Exit(1)
 
@@ -76,15 +80,42 @@ def check(
 
             progress.update(task, completed=True)
 
-            if not devices:
-                print_error("No devices connected via ADB")
-                raise typer.Exit(1)
+        # Process results after progress bar ends
+        if not devices:
+            print_error("No devices connected via ADB")
+            raise typer.Exit(1)
 
-            print_success(f"{len(devices)} device(s) connected")
+        print_success(f"{len(devices)} device(s) connected")
 
-            if verbose:
-                for device in devices:
-                    print_info(f"  {device}")
+        # Create a rich table to display device information
+        table = Table(title="Connected Devices")
+        table.add_column("Serial Number", style="cyan", no_wrap=True)
+        table.add_column("Model", style="green")
+        table.add_column("Status", style="yellow")
+
+        # Get device model for each connected device
+        for i, device_line in enumerate(devices, 1):
+            # Parse device serial number from the line
+            parts = device_line.strip().split()
+            if len(parts) >= 2:
+                serial = parts[0]
+                status = parts[1]
+                
+                # Get device model
+                model_cmd = f"adb -s {serial} shell getprop ro.product.model"
+                model_output = run_command(model_cmd, verbose)
+                model = model_output.strip() if model_output else "Unknown"
+                
+                # Add to table
+                table.add_row(serial, model, status)
+
+        # Print the table
+        console.print(table)
+
+        if verbose:
+            print_info("Device details:")
+            for device in devices:
+                print_info(f"  {device}")
 
     except Exception as e:
         print_error(f"Error checking ADB connection: {e}")
@@ -98,27 +129,40 @@ def install(
     keep_name: bool = typer.Option(False, "--keep-name", "-k", help="Keep the original name when installing"),
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Custom name for frida-server on the device"),
     url: Optional[str] = typer.Option(None, "--url", "-u", help="Custom URL to download frida-server from (supports xz, gz, tar.gz formats)"),
+    proxy: Optional[str] = typer.Option(None, "--proxy", "-p", help="Proxy server to use for downloading frida-server"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
 ):
     """Install frida-server on the device"""
     try:
+        result = None
+        
+        # Check ADB connection first, outside the progress bar
+        from fsm.core import check_adb_connection
+        check_adb_connection(verbose)
+        
+        # Show progress bar while running the installation
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
             task = progress.add_task(description="Installing frida-server...", total=None)
+            
+            # Run the actual installation
+            try:
+                result = core_install(version, verbose, repo, keep_name, name, url, proxy)
+                progress.update(task, completed=True)
+            except Exception as e:
+                # Update progress bar before raising exception
+                progress.update(task, completed=True)
+                raise
+        
+        # Print success messages after progress bar has finished
+        print_success(f"Successfully installed frida-server")
+        print_info(f"Location: {result}")
 
-            # Run installation
-            result = core_install(version, verbose, repo, keep_name, name, url)
-
-            progress.update(task, completed=True)
-
-            print_success(f"Successfully installed frida-server")
-            print_info(f"Location: {result}")
-
-            if version:
-                print_info(f"To run this version: fsm run -V {version}")
+        if version:
+            print_info(f"To run this version: fsm run -V {version}")
 
     except SystemExit as e:
         raise typer.Exit(e.code)
@@ -133,10 +177,12 @@ def run(
     params: Optional[str] = typer.Option(None, "--params", "-p", help="Additional parameters for frida-server"),
     version: Optional[str] = typer.Option(None, "--version", "-V", help="Specific version of frida-server to run"),
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Custom name of frida-server to run"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force run the specified version, stop any existing frida-server processes first"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
 ):
     """Run frida-server on the device"""
     try:
+        success = False
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -145,9 +191,13 @@ def run(
             task = progress.add_task(description="Starting frida-server...", total=None)
 
             # Run frida-server
-            core_run(dir, params, verbose, version, name)
+            success = core_run(dir, params, verbose, version, name, force)
 
             progress.update(task, completed=True)
+        
+        # Print success message outside the Progress context manager
+        if success:
+            print_success("frida-server is running")
 
     except SystemExit as e:
         raise typer.Exit(e.code)
@@ -226,46 +276,55 @@ def ps(
 ):
     """List running processes on the device"""
     try:
+        # Get running processes
+        from fsm.core import run_command
+
+        search_name = name if name else "frida-server"
+        cmd = f"adb shell ps -A | grep {search_name}"
+        
+        # Use progress bar only for command execution
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
             task = progress.add_task(description="Checking running processes...", total=None)
-
-            # Get running processes
-            from fsm.core import run_command
-
-            search_name = name if name else "frida-server"
-            cmd = f"adb shell ps -A | grep {search_name}"
             output = run_command(cmd, verbose)
-
             progress.update(task, completed=True)
 
-            if not output:
-                print_warning(f"No running processes found matching '{search_name}'")
-                return
+        # Process output after progress bar ends
+        if not output:
+            print_warning(f"No running processes found matching '{search_name}'")
+            return
 
-            # Process the output
-            lines = output.strip().split('\n')
+        # Process the output - remove duplicates
+        lines = output.strip().split('\n')
+        # Deduplicate lines while preserving order
+        seen = set()
+        unique_lines = []
+        for line in lines:
+            stripped_line = line.strip()
+            if stripped_line and stripped_line not in seen:
+                seen.add(stripped_line)
+                unique_lines.append(stripped_line)
 
-            # Create a rich table
-            table = Table(title=f"Running Processes matching '{search_name}'")
-            table.add_column("PID", style="cyan", no_wrap=True)
-            table.add_column("User", style="yellow")
-            table.add_column("Memory", style="blue")
-            table.add_column("Command", style="green")
+        # Create a rich table
+        table = Table(title=f"Running Processes matching '{search_name}'")
+        table.add_column("PID", style="cyan", no_wrap=True)
+        table.add_column("User", style="yellow")
+        table.add_column("Memory", style="blue")
+        table.add_column("Command", style="green")
 
-            for line in lines:
-                parts = line.strip().split()
-                if len(parts) >= 8:
-                    pid = parts[1]
-                    user = parts[0]
-                    memory = parts[4]
-                    command = ' '.join(parts[7:])
-                    table.add_row(pid, user, memory, command)
+        for line in unique_lines:
+            parts = line.strip().split()
+            if len(parts) >= 9:  # Need at least 9 parts to include command
+                pid = parts[1]
+                user = parts[0]
+                memory = parts[4]
+                command = ' '.join(parts[8:])  # Command starts from 9th field (index 8), not 8th field
+                table.add_row(pid, user, memory, command)
 
-            console.print(table)
+        console.print(table)
 
     except Exception as e:
         print_error(f"Error checking processes: {e}")
@@ -280,6 +339,13 @@ def kill(
 ):
     """Kill frida-server process(es) on the device"""
     try:
+        # Check ADB connection first, outside the progress bar
+        from fsm.core import check_adb_connection
+        check_adb_connection(verbose)
+        
+        result = None
+        
+        # Show progress bar while killing processes
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -288,9 +354,18 @@ def kill(
             task = progress.add_task(description="Killing processes...", total=None)
 
             # Kill processes
-            core_kill(pid, verbose, name)
+            result = core_kill(pid, verbose, name)
 
             progress.update(task, completed=True)
+        
+        # Print result after progress bar ends
+        if result:
+            if "Success:" in result["message"]:
+                print_success(result["message"])
+            elif "Warning:" in result["message"]:
+                print_warning(result["message"])
+            elif "Error:" in result["message"]:
+                print_error(result["message"])
 
     except SystemExit as e:
         raise typer.Exit(e.code)
