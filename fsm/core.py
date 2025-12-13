@@ -349,6 +349,9 @@ def get_frida_server_version(remote_path, verbose=False):
 
 def run_frida_server(custom_dir=None, custom_params=None, verbose=False, version=None, name=None, force=False):
     """Run frida-server on the Android device"""
+    if verbose:
+        rich_print(f"DEBUG: run_frida_server called with version={version}, name={name}")
+    
     check_adb_connection(verbose)
 
     # Determine the directory to use
@@ -358,6 +361,10 @@ def run_frida_server(custom_dir=None, custom_params=None, verbose=False, version
     server_path = None
     target_version = None
     target_name = None
+    
+    if verbose:
+        rich_print(f"DEBUG: Server directory: {server_dir}")
+        rich_print(f"DEBUG: Initial server_path: {server_path}")
 
     # If name is specified, use that specific name
     if name:
@@ -368,10 +375,60 @@ def run_frida_server(custom_dir=None, custom_params=None, verbose=False, version
         version_match = re.search(r'\d+\.\d+\.\d+', name)
         if version_match:
             target_version = version_match.group()
-    # If version is specified, try to use that specific version
+    # If version is specified, find the matching file - ALWAYS execute this when version is provided
     elif version:
-        server_path = f"{server_dir}/frida-server-{version}"
+        if verbose:
+            rich_print(f"DEBUG: Version specified: {version}")
+            rich_print(f"DEBUG: Server directory: {server_dir}")
+        
+        # List all frida-server files in the directory
+        output = run_command(f"adb shell ls {server_dir} | grep frida-server", verbose)
+        if not output:
+            rich_print(f"Error: No frida-server found in {server_dir}")
+            rich_print("Please install it first")
+            sys.exit(1)
+        
+        if verbose:
+            rich_print(f"DEBUG: Found files: {output}")
+        
+        # Find the file that contains the version number
+        import re
+        files = output.strip().split('\n')
+        matching_file = None
+        
+        # First try: Find file with version in filename
+        for file in files:
+            filename = file.strip()
+            if re.search(rf'{re.escape(version)}', filename):
+                matching_file = filename
+                break
+        
+        # Second try: If no file has version in filename, check each file's actual version
+        if not matching_file:
+            for file in files:
+                filename = file.strip()
+                remote_path = f"{server_dir}/{filename}"
+                file_version = get_frida_server_version(remote_path, verbose)
+                # Extract just the version number from the output (e.g., "17.4.0" from "Frida 17.4.0")
+                if file_version:
+                    import re
+                    version_match = re.search(r'\d+\.\d+\.\d+', file_version)
+                    if version_match and version_match.group() == version:
+                        matching_file = filename
+                        break
+        
+        if not matching_file:
+            rich_print(f"Error: No frida-server found with version {version} in {server_dir}")
+            rich_print("Please check the installed versions with: fsm list")
+            sys.exit(1)
+        
+        server_path = f"{server_dir}/{matching_file}"
         target_version = version
+        target_name = matching_file
+        
+        if verbose:
+            rich_print(f"DEBUG: Found matching file: {matching_file}")
+            rich_print(f"DEBUG: Server path set to: {server_path}")
     elif custom_params and custom_params.startswith('/'):
         # If custom_params starts with '/', treat it as a full path
         server_path = custom_params
@@ -440,7 +497,7 @@ def run_frida_server(custom_dir=None, custom_params=None, verbose=False, version
         if verbose:
             rich_print("Force option specified, will stop all existing processes and start the requested version")
     
-    # Now check if the file exists (only if process is not already running)
+    # Now check if the file exists
     output = run_command(f'adb shell ls {server_path}', verbose)
     if not output or 'No such file or directory' in output:
         if version:

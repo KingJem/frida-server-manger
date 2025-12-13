@@ -197,7 +197,10 @@ def run(
         
         # Print success message outside the Progress context manager
         if success:
-            print_success("frida-server is running")
+            if version:
+                print_success(f"frida-server version {version} is running")
+            else:
+                print_success("frida-server is running")
 
     except SystemExit as e:
         raise typer.Exit(e.code)
@@ -214,6 +217,12 @@ def list(
 ):
     """List frida-server files on the device and show their versions"""
     try:
+        # Get the list of files first with progress bar
+        from fsm.core import run_command, get_frida_server_version, DEFAULT_INSTALL_DIR
+        
+        server_dir = dir if dir else DEFAULT_INSTALL_DIR
+        files = []
+            
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -221,11 +230,6 @@ def list(
         ) as progress:
             task = progress.add_task(description="Listing frida-server files...", total=None)
 
-            # Get the list of files
-            from fsm.core import run_command, get_frida_server_version, DEFAULT_INSTALL_DIR
-
-            server_dir = dir if dir else DEFAULT_INSTALL_DIR
-            
             # Build the command with optional name filter
             if name:
                 # If name is provided, search for that specific file
@@ -237,6 +241,8 @@ def list(
                     return
                 # File exists, use its name
                 files = [name]
+                # Update progress bar to completed
+                progress.update(task, completed=True)
             else:
                 # Otherwise list all frida-server files
                 output = run_command(f"adb shell ls {server_dir} | grep frida-server", verbose)
@@ -249,20 +255,24 @@ def list(
                 
                 # Process the files and get their versions
                 files = output.strip().split('\n')
+                # Sort files alphabetically by filename
+                files.sort()
 
-            # Create a rich table
-            table = Table(title=f"Frida-Server Files in {server_dir}" + (f" (Filtered by: {name})" if name else ""))
-            table.add_column("Filename", style="cyan", no_wrap=True)
-            table.add_column("Version", style="green")
+        # Create a rich table after progress bar is done
+        table = Table(title=f"Frida-Server Files in {server_dir}" + (f" (Filtered by: {name})" if name else ""))
+        table.add_column("Filename", style="cyan", no_wrap=True)
+        table.add_column("Version", style="green")
 
-            # Process each file and get its version
-            for file in files:
-                filename = file.strip()
-                remote_path = f"{server_dir}/{filename}"
-                version = get_frida_server_version(remote_path, verbose)
-                table.add_row(filename, version if version else "Unknown")
+        # Process each file and get its version
+        for file in files:
+            filename = file.strip()
+            remote_path = f"{server_dir}/{filename}"
+            version = get_frida_server_version(remote_path, verbose)
+            table.add_row(filename, version if version else "Unknown")
 
-            console.print(table)
+        console.print(table)
+        # Print success message
+        print_success(f"Found {len(files)} frida-server file(s) in {server_dir}")
 
     except Exception as e:
         print_error(f"Error listing frida-server files: {e}")

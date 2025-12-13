@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "frida-server-manger"
-version = "0.4"
+name = "frida-server-manager"
+version = "0.5"
 description = "A tool to manage frida-server on Android devices"
 readme = "README.md"
 requires-python = ">=3.6"
