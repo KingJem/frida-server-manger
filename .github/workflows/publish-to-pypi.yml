@@ -44,13 +44,8 @@ jobs:
         tag_name: ${{ github.ref_name }}
         name: Release ${{ github.ref_name }}
         body: |
-          ## Changes in this release
+          ## Release notes
           
-          This release includes the following changes:
-          
-          - Fixed frida-server version matching logic
-          - Improved version matching for files without version numbers in their filenames
-          - Added detailed debug output for better troubleshooting
-          - Updated version to 0.5
+          This release is published automatically when a new version tag is pushed.
         draft: false
         prerelease: false
