@@ -280,6 +280,16 @@ def install_frida_server(version=None, verbose=False, repo="frida/frida", keep_n
             remote_path = f"{DEFAULT_INSTALL_DIR}/frida-server-{version}"
         elif custom_name:
             remote_path = f"{DEFAULT_INSTALL_DIR}/{custom_name}"
+        elif url and keep_name:
+            # Use original filename from URL when --keep-name is specified
+            original_filename = url.split('/')[-1]
+            # Remove file extension if it's a compressed file
+            if original_filename.endswith('.xz') or original_filename.endswith('.gz') or original_filename.endswith('.tar.gz'):
+                original_filename = original_filename.split('.')[0]  # Remove the first extension
+                # If it still has .tar extension, remove that too
+                if original_filename.endswith('.tar'):
+                    original_filename = original_filename[:-4]
+            remote_path = f"{DEFAULT_INSTALL_DIR}/{original_filename}"
         else:
             remote_path = f"{DEFAULT_INSTALL_DIR}/frida-server"
 

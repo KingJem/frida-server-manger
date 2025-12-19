@@ -1,4 +1,5 @@
 import sys
+import os
 import typer
 from typing import Optional
 from rich.console import Console
@@ -232,25 +233,29 @@ def list(
 
             # Build the command with optional name filter
             if name:
-                # If name is provided, search for that specific file
-                output = run_command(f"adb shell ls {server_dir}/{name} 2>/dev/null || echo 'Not found'", verbose)
-                # Check if the file exists
+                # If name is provided, search for matching files with pattern
+                output = run_command(f"adb shell ls {server_dir}/*{name}* 2>/dev/null || echo 'Not found'", verbose)
+                # Check if any files were found
                 if output.strip() == 'Not found' or 'No such file or directory' in output:
                     progress.update(task, completed=True)
-                    print_warning(f"No frida-server file found with name '{name}' in {server_dir}")
+                    print_warning(f"No frida-related server file found matching pattern '{name}' in {server_dir}")
                     return
-                # File exists, use its name
-                files = [name]
+                # Process the found files
+                files = output.strip().split('\n')
+                # Extract just the filenames (remove path if included)
+                files = [os.path.basename(file) for file in files]
+                # Sort files alphabetically by filename
+                files.sort()
                 # Update progress bar to completed
                 progress.update(task, completed=True)
             else:
-                # Otherwise list all frida-server files
-                output = run_command(f"adb shell ls {server_dir} | grep frida-server", verbose)
+                # Otherwise list all frida-related server files
+                output = run_command(f"adb shell ls {server_dir} | grep -E 'frida-server|florida-server|frida.*server|server.*frida'", verbose)
                 
                 progress.update(task, completed=True)
                 
                 if not output:
-                    print_warning(f"No frida-server files found in {server_dir}")
+                    print_warning(f"No frida-related server files found in {server_dir}")
                     return
                 
                 # Process the files and get their versions
@@ -258,9 +263,15 @@ def list(
                 # Sort files alphabetically by filename
                 files.sort()
 
-        # Create a rich table after progress bar is done
-        table = Table(title=f"Frida-Server Files in {server_dir}" + (f" (Filtered by: {name})" if name else ""))
-        table.add_column("Filename", style="cyan", no_wrap=True)
+        # Create a rich table with highlighted title
+        from rich.text import Text
+        title_text = Text(f"Frida-Server Files in ")
+        dir_text = Text(f"{server_dir}", style="bold yellow")
+        title_text.append(dir_text)
+        if name:
+            title_text.append(f" (Filtered by: {name})")
+        table = Table(title=title_text)
+        table.add_column("Filename", no_wrap=True)
         table.add_column("Version", style="green")
 
         # Process each file and get its version
@@ -268,11 +279,32 @@ def list(
             filename = file.strip()
             remote_path = f"{server_dir}/{filename}"
             version = get_frida_server_version(remote_path, verbose)
-            table.add_row(filename, version if version else "Unknown")
+            
+            # Highlight keywords in filename
+            filename_text = Text(filename)
+            if "frida-server" in filename:
+                filename_text.highlight_words(["frida-server"], style="bold red")
+            elif "florida-server" in filename:
+                filename_text.highlight_words(["florida-server"], style="bold magenta")
+            elif "frida" in filename and "server" in filename:
+                filename_text.highlight_words(["frida", "server"], style="bold blue")
+            else:
+                filename_text = Text(filename, style="cyan")
+            
+            table.add_row(filename_text, version if version else "Unknown")
 
         console.print(table)
-        # Print success message
-        print_success(f"Found {len(files)} frida-server file(s) in {server_dir}")
+        # Print success message with highlighted path
+        success_text = Text(f"Found {len(files)} ")
+        if len(files) == 1:
+            keyword_text = Text("frida-related server file", style="bold blue")
+        else:
+            keyword_text = Text("frida-related server files", style="bold blue")
+        success_text.append(keyword_text)
+        success_text.append(f" in ")
+        path_text = Text(f"{server_dir}", style="bold yellow")
+        success_text.append(path_text)
+        console.print(success_text)
 
     except Exception as e:
         print_error(f"Error listing frida-server files: {e}")

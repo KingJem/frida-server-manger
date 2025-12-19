@@ -4,10 +4,17 @@ A command-line tool to manage frida-server on Android devices.
 
 ## Features
 
-- Install frida-server on Android devices
-- Run frida-server with custom options
-- List frida-server files on the device with enhanced version detection
-- Filter frida-server files by name
+- Install frida-server on Android devices from GitHub or custom URLs
+- Run frida-server with custom options and parameters
+- Enhanced list command with visual highlighting and fuzzy matching
+- Support for multiple frida-related server files (frida-server, florida-server, etc.)
+- Filter frida-server files by name with wildcard support
+- Process management (list, kill) with name and PID filtering
+- Proxy support for network operations
+- Force run option to stop existing processes before starting new ones
+- Enhanced output formatting with Rich library
+- Custom URL support with filename preservation
+- Support for various compression formats (xz, gz, tar.gz)
 - Check frida versions and compatibility
 - Easy-to-use command-line interface
 
@@ -32,22 +39,25 @@ fsm
 fsm install
 
 # Install a specific version
-fsm install 16.1.4
+fsm install 17.2.15
 
 # Install with custom repository (owner/repo format)
-fsm install -r frida/frida
+fsm install -r frida/frida 17.2.15
 
 # Install with custom name
-fsm install -n my-frida-server
+fsm install -n my-frida-server 17.2.15
 
 # Install keeping original name
-fsm install -k
+fsm install -k 17.2.15
 
-# Install from custom URL
-  fsm install --url https://example.com/frida-server.xz
+# Install from custom URL (supports xz, gz, tar.gz)
+fsm install --url https://example.com/frida-server.xz
 
-# Install with proxy
-fsm install -p http://127.0.0.1:7890
+# Install from custom URL with proxy and keep original name
+fsm install --url https://github.com/Ylarod/Florida/releases/download/17.5.2/florida-server-17.5.2-android-arm64.gz --proxy http://127.0.0.1:7890 --keep-name
+
+# Install with proxy (short option)
+fsm install -p http://127.0.0.1:7890 17.2.15
 ```
 
 #### Run frida-server
@@ -70,14 +80,23 @@ fsm run -V 16.1.4 -f
 
 #### List frida-server files
 ```bash
-# List frida-server files in default directory
+# List frida-related server files in default directory with highlighting
 fsm list
 
-# List frida-server files in custom directory
+# List frida-related server files in custom directory
 fsm list -d /custom/path
 
-# List specific frida-server file by name
-fsm list -n frida-server-16.1.4
+# List files with name containing specific keyword (fuzzy matching)
+fsm list -n 17.2
+
+# List specific version files
+fsm list -n frida-server-17.2.15
+
+# List florida-server files
+fsm list -n florida-server
+
+# List all files containing "frida" in their name
+fsm list -n frida
 ```
 
 #### Process Management
@@ -157,10 +176,17 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ##### 功能特性
 
-- 在Android设备上安装frida-server
-- 使用自定义选项运行frida-server
-- 列出设备上的frida-server文件并显示增强的版本检测
-- 根据名称筛选frida-server文件
+- 从GitHub或自定义URL在Android设备上安装frida-server
+- 使用自定义选项和参数运行frida-server
+- 增强的list命令，支持视觉高亮和模糊匹配
+- 支持多种frida相关的服务器文件（frida-server, florida-server等）
+- 支持通配符的名称筛选功能
+- 进程管理（列出、终止），支持按名称和PID筛选
+- 网络操作的代理支持
+- 强制运行选项，可在启动新进程前停止现有进程
+- 使用Rich库增强输出格式
+- 自定义URL支持，保留原始文件名
+- 支持多种压缩格式（xz, gz, tar.gz）
 - 检查frida版本和兼容性
 - 易用的命令行界面
 
@@ -185,22 +211,25 @@ fsm
 fsm install
 
 # 安装特定版本
-fsm install 16.1.4
+fsm install 17.2.15
 
 # 使用自定义仓库安装（owner/repo格式）
-fsm install -r frida/frida
+fsm install -r frida/frida 17.2.15
 
 # 使用自定义名称安装
-fsm install -n my-frida-server
+fsm install -n my-frida-server 17.2.15
 
 # 保持原始名称安装
-fsm install -k
+fsm install -k 17.2.15
 
-# 从自定义URL安装
-  fsm install --url https://example.com/frida-server.xz
+# 从自定义URL安装（支持xz, gz, tar.gz格式）
+fsm install --url https://example.com/frida-server.xz
 
-# 使用代理安装
-fsm install -p http://127.0.0.1:7890
+# 从自定义URL安装，使用代理并保留原始文件名
+fsm install --url https://github.com/Ylarod/Florida/releases/download/17.5.2/florida-server-17.5.2-android-arm64.gz --proxy http://127.0.0.1:7890 --keep-name
+
+# 使用代理安装（短选项）
+fsm install -p http://127.0.0.1:7890 17.2.15
 ```
 
 #### 运行frida-server
@@ -223,14 +252,23 @@ fsm run -V 16.1.4 -f
 
 #### 列出frida-server文件
 ```bash
-# 列出默认目录中的frida-server文件
+# 列出默认目录中的frida相关服务器文件，带有高亮效果
 fsm list
 
-# 列出自定义目录中的frida-server文件
+# 列出自定义目录中的frida相关服务器文件
 fsm list -d /custom/path
 
-# 根据名称列出特定的frida-server文件
-fsm list -n frida-server-16.1.4
+# 列出名称包含特定关键字的文件（模糊匹配）
+fsm list -n 17.2
+
+# 列出特定版本的文件
+fsm list -n frida-server-17.2.15
+
+# 列出florida-server文件
+fsm list -n florida-server
+
+# 列出名称中包含"frida"的所有文件
+fsm list -n frida
 ```
 
 #### 进程管理

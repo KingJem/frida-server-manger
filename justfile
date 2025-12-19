@@ -50,6 +50,18 @@ install-custom-name:
 install-custom-name-short:
   fsm install -n my-frida-server 16.1.4
 
+# 安装时使用代理 (长选项)
+install-with-proxy:
+  fsm install --proxy http://127.0.0.1:7890 16.1.4
+
+# 安装时使用代理 (短选项)
+install-with-proxy-short:
+  fsm install -p http://127.0.0.1:7890 16.1.4
+
+# 从自定义URL安装并保留原始文件名
+install-custom-url-keep-name:
+  fsm install --url https://github.com/Ylarod/Florida/releases/download/17.5.2/florida-server-17.5.2-android-arm64.gz --keep-name
+
 # 运行默认frida-server
 run-default:
   fsm run
@@ -98,6 +110,14 @@ run-combined:
 run-combined-short:
   fsm -v run -d /data/local/tmp -p "-D" -V 16.1.4
 
+# 强制运行指定版本 (先停止所有现有进程)
+run-force:
+  fsm run --version 16.1.4 --force
+
+# 强制运行指定版本 (短选项)
+run-force-short:
+  fsm run -V 16.1.4 -f
+
 # 列出frida-server文件
 list-files:
   fsm list
@@ -113,6 +133,18 @@ list-custom-dir:
 # 列出特定目录下的frida-server文件 (短选项)
 list-custom-dir-short:
   fsm list -d /data/local/tmp
+
+# 列出包含特定关键字的frida相关文件 (模糊匹配)
+list-fuzzy-match:
+  fsm list -n 17.2
+
+# 列出特定名称的frida相关文件 (精确匹配)
+list-specific-name:
+  fsm list -n frida-server-17.2.15
+
+# 列出florida-server相关文件
+list-florida-server:
+  fsm list -n florida-server
 
 # 列出运行的进程
 ps-list:
